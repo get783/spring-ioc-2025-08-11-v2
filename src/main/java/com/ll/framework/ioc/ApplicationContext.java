@@ -60,12 +60,8 @@ public class ApplicationContext {
     public <T> T genBean(String beanName) {
         if (beans.containsKey(beanName)) {
             return (T) beans.get(beanName);
+        } else {
+            throw new RuntimeException("'%s' 빈 찾기 실패".formatted(beanName));
         }
-
-        Class<?> component = components.stream()
-                .filter(c -> beanName.equals(Ut.str.lcfirst(c.getSimpleName())))
-                .findFirst()
-                .get();
-        return genBean(component);
     }
 }

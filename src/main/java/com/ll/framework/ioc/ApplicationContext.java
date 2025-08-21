@@ -1,52 +1,71 @@
 package com.ll.framework.ioc;
 
-import com.ll.domain.testPost.testPost.repository.TestPostRepository;
-import com.ll.domain.testPost.testPost.service.TestFacadePostService;
-import com.ll.domain.testPost.testPost.service.TestPostService;
 import com.ll.framework.ioc.annotations.Component;
 import com.ll.standard.util.Ut;
+import lombok.RequiredArgsConstructor;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.Constructor;
+import java.util.*;
 
 public class ApplicationContext {
     private Reflections reflections;
+    private Set<Class<?>> components;
     private Map<String, Object> beans;
 
     public ApplicationContext(String basePackage) {
-        reflections = new Reflections(basePackage, Scanners.TypesAnnotated);
-        beans = new HashMap<>();
+        this.reflections = new Reflections(basePackage, Scanners.TypesAnnotated);
+        this.components = new HashSet<>();
+        this.beans = new HashMap<>();
     }
 
     public void init() {
-        Set<Class<?>> components = reflections.getTypesAnnotatedWith(Component.class);
+        this.components = reflections.getTypesAnnotatedWith(Component.class);
 
         for (Class<?> component : components) {
-            String classNameToCamelCase = Ut.str.lcfirst(component.getSimpleName());
+            if (component.isInterface()) continue;
+            genBean(component);
+        }
+    }
 
-            beans.put(classNameToCamelCase, genBean(classNameToCamelCase));
+    public <T> T genBean(Class<?> clazz) {
+        String beanName = Ut.str.lcfirst(clazz.getSimpleName());
+        if (beans.containsKey(beanName)) {
+            return (T) beans.get(beanName);
+        }
+
+        try {
+            Constructor<?> constructor = Arrays.stream(clazz.getDeclaredConstructors())
+                    .filter(c -> c.isAnnotationPresent(RequiredArgsConstructor.class))
+                    .findFirst()
+                    .orElseGet(() -> clazz.getDeclaredConstructors()[0]);
+
+            List<Object> dependencies = new ArrayList<>();
+            for (Class<?> parameterType : constructor.getParameterTypes()) {
+                dependencies.add(genBean(parameterType));
+            }
+
+            constructor.setAccessible(true);
+            Object bean = constructor.newInstance(dependencies.toArray());
+
+            beans.put(beanName, bean);
+
+            return (T) bean;
+        } catch (Exception e) {
+            throw new RuntimeException("'%s' 빈 생성 실패: ".formatted(beanName), e);
         }
     }
 
     public <T> T genBean(String beanName) {
-        Object bean = beans.get(beanName);
-        if (bean == null) {
-            bean = switch (beanName) {
-                case "testFacadePostService" -> new TestFacadePostService(
-                        genBean("testPostService"),
-                        genBean("testPostRepository")
-                );
-                case "testPostService" -> new TestPostService(
-                        genBean("testPostRepository")
-                );
-                case "testPostRepository" -> new TestPostRepository();
-                default -> null;
-            };
-            beans.put(beanName, bean);
+        if (beans.containsKey(beanName)) {
+            return (T) beans.get(beanName);
         }
-        return (T) bean;
+
+        Class<?> component = components.stream()
+                .filter(c -> beanName.equals(Ut.str.lcfirst(c.getSimpleName())))
+                .findFirst()
+                .get();
+        return genBean(component);
     }
 }

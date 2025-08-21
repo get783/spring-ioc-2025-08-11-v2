@@ -4,6 +4,7 @@ import com.ll.domain.testPost.testPost.repository.TestPostRepository;
 import com.ll.domain.testPost.testPost.service.TestFacadePostService;
 import com.ll.domain.testPost.testPost.service.TestPostService;
 import com.ll.framework.ioc.annotations.Component;
+import com.ll.standard.util.Ut;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
 
@@ -24,8 +25,7 @@ public class ApplicationContext {
         Set<Class<?>> components = reflections.getTypesAnnotatedWith(Component.class);
 
         for (Class<?> component : components) {
-            String className = component.getSimpleName();
-            String classNameToCamelCase = className.substring(0, 1).toLowerCase() + className.substring(1);
+            String classNameToCamelCase = Ut.str.lcfirst(component.getSimpleName());
 
             beans.put(classNameToCamelCase, genBean(classNameToCamelCase));
         }
